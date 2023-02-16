@@ -1,0 +1,7 @@
+1) Run Ryu-controller in one terminal
+    sudo -E ryu-manager --observe-links ~/Desktop/fyp/fyp-implem/Ryu-controller/main.py
+
+2) Run mininet program in another terminal
+    a)  sudo -E filename.py
+    b)  after running program , clean the process using this command
+        sudo mn -c
