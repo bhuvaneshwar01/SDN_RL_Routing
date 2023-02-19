@@ -1,7 +1,15 @@
-1) Run Ryu-controller in one terminal
+1) Config with your mysql authentication in net.py before implementation
+
+2) Start mysql server , not necessary (it will be useful to learn)
+
+3) Run Ryu-controller in one terminal
     sudo -E ryu-manager --observe-links ~/Desktop/fyp/fyp-implem/Ryu-controller/main.py
 
-2) Run mininet program in another terminal
+4) Run mininet program in another terminal
     a)  sudo -E filename.py
     b)  after running program , clean the process using this command
         sudo mn -c
+5) While running mininet, ryu application, you can view network topologies in gui format by running in another terminal
+    python3 Ryu-controller/topo.py
+
+6) After finish,Truncate the data , python3  Ryu-controller/deletesql.py

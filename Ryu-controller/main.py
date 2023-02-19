@@ -33,7 +33,7 @@ class SimpleSwitch(app_manager.RyuApp):
         msg = ev.msg
         self.logger.info('+++ OFP SWITCH FEATURES +++')
         self.logger.info('[+]\tOFPSwitchFeatures received: '
-                         '\n\tdatapath_id=0x%016x n_buffers=%d '
+                         '\n\tdatapath_id=%s n_buffers=%d '
                          '\n\tn_tables=%d auxiliary_id=%d '
                          '\n\tcapabilities=0x%08x',
                          msg.datapath_id, msg.n_buffers, msg.n_tables,
