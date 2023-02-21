@@ -27,7 +27,7 @@ try:
     for i in s:
         switch.append(i[0])
     
-    sql = "SELECT src_switch_id,dst_switch_id FROM LINK_TABLE;"
+    sql = "SELECT node,connected_to FROM GRAPH_LINK_TABLE;"
     mycursor.execute(sql)
     link = mycursor.fetchall()
 
@@ -35,7 +35,8 @@ try:
         G.add_node(i[0],type='host')
 
     for i in switch:
-        G.add_node(i[0],type='switch')
+        if i[0] not in G:
+            G.add_node(i[0],type='switch')
     
     for i in link:
         G.add_edge(i[0],i[1])
@@ -55,3 +56,6 @@ finally:
     if mydb.is_connected():
         mycursor.close()
         mydb.close()
+
+
+        

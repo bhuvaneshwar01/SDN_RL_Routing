@@ -4,10 +4,13 @@ from ryu.controller.handler import set_ev_cls, CONFIG_DISPATCHER,MAIN_DISPATCHER
 from ryu.lib.packet import ethernet, packet, vlan
 from ryu.ofproto import ofproto_v1_0, ofproto_v1_3
 from ryu.topology import event, switches
-from ryu.topology.api import get_switch, get_link, get_host
+from ryu.topology.api import get_all_switch, get_all_link,get_switch, get_link, get_host
 import networkx as nx
+from networkx.convert import to_dict_of_lists
+from ryu.lib import hub
 import matplotlib.pyplot as plt
 import mysql.connector
+import copy
 
 class SimpleController(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -15,6 +18,7 @@ class SimpleController(app_manager.RyuApp):
     def __init__(self, *_args, **_kwargs):
         super(SimpleController,self).__init__(*_args, **_kwargs)
         self.topology_api_app = self
+        # self.discover_thread = hub.spawn(self._discover)
         self.net = {}
         self.graph = nx.DiGraph()
         self.count = 0
@@ -22,6 +26,7 @@ class SimpleController(app_manager.RyuApp):
         self.nodes = {}
         self.links = {}
         self.hosts = {}
+        self.topology = nx.DiGraph()
         self.congested_ports = set()
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
@@ -71,12 +76,11 @@ class SimpleController(app_manager.RyuApp):
                          msg.datapath_id, msg.n_buffers, msg.n_tables,
                          msg.auxiliary_id, msg.capabilities)
 
-
         self.add_flow(datapath, 0, match, actions)
 
     @set_ev_cls(event.EventSwitchEnter)
     def get_topology_data(self,ev):
-        
+        self.datapaths = copy.copy(get_switch(self.topology_api_app,None))
         switch = ev.switch
         self.net[switch.dp.id] = switch
         switch_id = switch.dp.id
@@ -103,7 +107,6 @@ class SimpleController(app_manager.RyuApp):
                 mydb.close()
 
 
-        self.graph.add_node(switch.dp.id,type='switch')
         self.logger.info("[+]\tSwitch %s has joined the network",switch.dp.id)
 
     @set_ev_cls(event.EventSwitchLeave)
@@ -126,7 +129,6 @@ class SimpleController(app_manager.RyuApp):
                 mycursor.close()
                 mydb.close()
         
-        del self.net[switch.dp.id]
         self.logger.info("[-]\tSwitch %s has left the network",switch.dp.id)
     
     @set_ev_cls(event.EventHostAdd)
@@ -180,17 +182,15 @@ class SimpleController(app_manager.RyuApp):
                 mydb.close()
         
         self.logger.info("[-]\tRemoving host detected with MAC %s", mac)
-        self.graph.remove_node(mac)
+        
 
-    @set_ev_cls(event.EventPortAdd)
-    def get_port_data(self, ev):
-        port = ev.port
-        switch = port.dpid
-        port_no = port.port_no
-        self.logger.info("[+]\tNew port detected on switch %s port %s", switch, port_no)
-        self.graph.add_node(port_no, type='port')
-        self.graph.add_edge(switch, port_no, type='port')
-    
+    # @set_ev_cls(event.EventPortAdd)
+    # def get_port_data(self, ev):
+    #     port = ev.port
+    #     switch = port.dpid
+    #     port_no = port.port_no
+    #     self.logger.info("[+]\tNew port detected on switch %s port %s", switch, port_no)
+        
     @set_ev_cls(event.EventPortDelete)
     def del_port_data(self,ev):
         port = ev.port
@@ -214,8 +214,7 @@ class SimpleController(app_manager.RyuApp):
                 mydb.close()
 
         self.logger.info("[-]\tDeleting port detected on switch %s port %s", switch, port_no)
-        
-    
+
     @set_ev_cls(event.EventLinkAdd)
     def get_link_data(self,ev):
         link = ev.link
@@ -246,8 +245,8 @@ class SimpleController(app_manager.RyuApp):
                 mycursor.close()
                 mydb.close()
 
-        self.graph.add_edge(link.src.dpid,link.dst.dpid,type='link')
-
+        self.re_route(links=link)
+        
     @set_ev_cls(event.EventLinkDelete)
     def link_delete_handler(self, ev):
         link = ev.link
@@ -273,8 +272,10 @@ class SimpleController(app_manager.RyuApp):
             if mydb.is_connected():
                 mycursor.close()
                 mydb.close()
+
+        self.re_route(links=link)
         
-    @set_ev_cls(ofp_event.EventOFPPacketIn,MAIN_DISPATCHER)
+    # @set_ev_cls(ofp_event.EventOFPPacketIn,MAIN_DISPATCHER)
     def packet_in_handler(self,ev):
         if ev.msg.msg_len < ev.msg.total_len:
             self.logger.debug("packet truncated: only %s of %s bytes",
@@ -293,7 +294,6 @@ class SimpleController(app_manager.RyuApp):
 
         dpid = datapath.id
         self.mac_to_port.setdefault(dpid, {})
-
         # self.logger.info("\tpacket in %s %s %s %s", dpid, src, dst, in_port)
 
         # learn a mac address to avoid FLOOD next time.
@@ -336,3 +336,127 @@ class SimpleController(app_manager.RyuApp):
 
     def startup(self):
         self.showing_graph()
+
+    def get_shortest_path(self,src,dst,G):
+        try:
+            path = nx.shortest_path(G,src,dst)
+            self.logger.info("\n\nShortest path from %s to %s : ", src,dst)
+            print(path)
+            return path
+        except nx.NetworkXNoPath:
+            self.logger.warn("\n\nNo path found between %s - %s\n",src,dst)
+            return None
+        except nx.NetworkXError:
+            self.logger.error("Network Error")
+            return None
+        
+    def re_route(self,links):
+        src = links.src.dpid
+        dst = links.dst.dpid
+
+        link = []
+        switch = []
+
+        G = nx.DiGraph()
+        self.datapaths = copy.copy(get_switch(self.topology_api_app,None))
+
+        for dp in self.datapaths:
+            if dp.dp.id not in G:
+                G.add_node(dp.dp.id)
+        links = copy.copy(get_link(self, None))
+        for link in links:
+            G.add_edge(link.src.dpid, link.dst.dpid, port=link.src.port_no)
+            G.add_edge(link.dst.dpid, link.src.dpid, port=link.dst.port_no)
+        
+        adj_list = to_dict_of_lists(G)
+
+        # Print the adjacency list
+        for node, neighbors in adj_list.items():
+            print(f"{node}: {neighbors}")
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN"
+                )
+            mycursor = mydb.cursor()
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_LINK_TABLE (node VARCHAR(50),connected_to VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_NODE_TABLE (node VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_NODE_TABLE;"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_LINK_TABLE;"
+            mycursor.execute(sql)
+
+            for node, neighbors in adj_list.items():
+                # sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
+                # val = (str(node))
+                # mycursor.execute(sql,val)
+                for i in neighbors:
+                    sql = "INSERT INTO GRAPH_LINK_TABLE(node,connected_to) values (%s, %s)"
+                    val = (str(node),str(i))
+                    mycursor.execute(sql,val)
+                    
+            
+            mydb.commit()
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+                
+        path = self.get_shortest_path(src,dst,G)
+
+        if path is not None:
+            for i in range(len(path) - 1):
+                src_dpid = path[i]
+                dst_dpid = path[i+1]
+                try:
+                    if src_dpid not in G or dst_dpid not in G:
+                        continue
+                    in_port = G[src_dpid][dst_dpid]['port']
+                    out_port = G[dst_dpid][src_dpid]['port']
+                    datapath = self.get_datapath(src_dpid)
+                    ofproto = datapath.ofproto
+                    parser = datapath.ofproto_parser
+                    actions = [parser.OFPActionOutput(out_port)]
+                    match = parser.OFPMatch(in_port=in_port)
+                    self.add_flow(datapath=datapath,priority=1,match=match,actions=actions)
+                except nx.NetworkXException:
+                    print(src_dpid+"\t"+dst_dpid)
+
+    def get_datapath(self,dpid):
+        for dp in self.datapaths:
+            if dp.dp.id == dpid:
+                return dp.dp
+        return None
+    
+    def _discover(self):
+        """
+        Loop to discover the network topology and update the graph.
+        """
+        while True:
+            # Wait for a switch or link event
+            event = hub.Event()
+            self.topology_api_app.send_event('TopologyDiscovery', event)
+            event.wait()
+
+            # Get the current switch list and link list
+            switch_list = copy.copy(get_switch(self.topology_api_app, None))
+            link_list = copy.copy(get_link(self.topology_api_app, None))
+
+            # Clear the graph and add nodes and edges
+            self.graph.clear()
+            self.graph.add_nodes_from(switch.dp.id for switch in switch_list)
+            self.graph.add_edges_from((link.src.dpid, link.dst.dpid) for link in link_list)
+
+            # Print the adjacency list
+            adj_list = self.graph.adjacency_list()
+            print("Adjacency list:")
+            for i, neighbors in enumerate(adj_list):
+                print(f"Switch {i+1}: {neighbors}")
+            print()

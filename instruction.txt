@@ -3,7 +3,7 @@
 2) Start mysql server , not necessary (it will be useful to learn)
 
 3) Run Ryu-controller in one terminal
-    sudo -E ryu-manager --observe-links ~/Desktop/fyp/fyp-implem/Ryu-controller/main.py
+    sudo mn --controller remote --topo tree,depth=3
 
 4) Run mininet program in another terminal
     a)  sudo -E filename.py
