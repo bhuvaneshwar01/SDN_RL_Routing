@@ -12,7 +12,8 @@ try:
         host="localhost",
         user="root",
         password="password",
-        database="SDN"
+        database="SDN",
+        auth_plugin='mysql_native_password'
         )
     mycursor = mydb.cursor()
     sql = "SELECT mac_address,connected_to_switch_id FROM HOST_TABLE;"

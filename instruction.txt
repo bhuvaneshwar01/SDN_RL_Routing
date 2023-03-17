@@ -13,3 +13,6 @@
     python3 Ryu-controller/topo.py
 
 6) After finish,Truncate the data , python3  Ryu-controller/deletesql.py
+
+
+flooding cmd : hping3 -c 10000 -d 120 -S -w 64 -p 80 --flood <dst_ip_address>

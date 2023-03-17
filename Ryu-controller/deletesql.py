@@ -5,7 +5,8 @@ try:
         host="localhost",
         user="root",
         password="password",
-        database="SDN"
+        database="SDN",
+                auth_plugin='mysql_native_password'
         )
     mycursor = mydb.cursor()
     sql = "TRUNCATE HOST_TABLE;"
@@ -19,3 +20,4 @@ finally:
     if mydb.is_connected():
         mycursor.close()
         mydb.close()
+
