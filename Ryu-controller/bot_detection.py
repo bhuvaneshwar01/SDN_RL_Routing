@@ -69,7 +69,7 @@ def bot_detection(traffic_data):
             pkt_sizes = const['pkt_sizes']
             pdf_values = [pdf.get(pkt_size, 0) if isinstance(pdf, dict) else 0 for pkt_size in pkt_sizes]
             pdf_mean = sum(pdf_values) / len(pdf_values) if len(pdf_values) > 0 else 0
-            X.append([const['const_score'], pdf_mean])
+            X.append([const['pkt_count'],const['dst_count'],const['const_score'], pdf_mean])
     X = np.array(X)
 
 
@@ -84,15 +84,15 @@ def bot_detection(traffic_data):
         if cluster == normal_cluster:
             cluster_label = 'normal'
         else:
-            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5:
+            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5 or const_data[src_ip]['pkt_count'] >= 50:
                 cluster_label = 'bot'
             else:
                 cluster_label = 'normal'
         agg_data[src_ip]['cluster'] = cluster_label
 
-    for src_ip,data in agg_data.items():
-        if data['pkt_count'] >= 500:
-            agg_data[src_ip]['cluster'] = 'bot'
+    # for src_ip,data in agg_data.items():
+    #     if data['pkt_count'] >= 100:
+    #         agg_data[src_ip]['cluster'] = 'bot'
 
     print("\t[+]\tAgg data : " + str(agg_data))
     # print("\n pdf : "+str(pdf_data))

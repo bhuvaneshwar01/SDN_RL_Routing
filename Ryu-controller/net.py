@@ -12,12 +12,12 @@ from ryu.topology.api import get_all_switch, get_all_link, get_switch, get_link,
 from ryu.lib import dpid as dpid_lib
 from ryu.controller import dpset
 import copy
-import matplotlib.pyplot as plt
 import mysql.connector
 import networkx as nx
 from threading import Lock
 from networkx.convert import to_dict_of_lists
 from bot_detection import bot_detection
+from sql import sql
 
 UP = 1
 DOWN = 0
@@ -35,6 +35,8 @@ class SimpleController(app_manager.RyuApp):
         self.traffic_data = {}
         self.topology = nx.DiGraph()
         self.bot_ip = set()
+        self.flow_to_port = {}
+        self.switch_status = {}
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -45,7 +47,8 @@ class SimpleController(app_manager.RyuApp):
                          '\n\tcapabilities=0x%08x',
                          msg.datapath_id, msg.n_buffers, msg.n_tables,
                          msg.auxiliary_id, msg.capabilities)
-
+        
+        self.switch_status[msg.datapath_id] = 'active'
         datapath = ev.msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -87,6 +90,13 @@ class SimpleController(app_manager.RyuApp):
                 priority=1, match=match)
             datapath.send_msg(mod)
 
+    @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
+    def state_change_handler(self, ev):
+        datapath = ev.datapath
+        if ev.state == MAIN_DISPATCHER:
+            self.switch_status[datapath.id] = 'active'
+        elif ev.state == DEAD_DISPATCHER:
+            self.switch_status[datapath.id] = 'dead'
 
     def send_packet(self, datapath, port, pkt):
         ofproto = datapath.ofproto
@@ -167,16 +177,25 @@ class SimpleController(app_manager.RyuApp):
             for s_ip,data in cluster.items():
                 if data['cluster'] == 'bot': 
                     self.bot_ip.add(str(s_ip))
-                    match = parser.OFPMatch(eth_src=src)
-                    mod = parser.OFPFlowMod(
-                    datapath, command=ofproto.OFPFC_DELETE,
-                    out_port=ofproto.OFPP_ANY, out_group=ofproto.OFPG_ANY,
-                    priority=1, match=match)
-                    datapath.send_msg(mod)  
+                    
+                    # match = parser.OFPMatch(eth_src=src)
+
+                    # actions = []
+
+                    # inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,
+                    #                          actions)]
+        
+
+                    # mod = parser.OFPFlowMod(
+                    # datapath, command=ofproto.OFPFC_ADD,
+                    # priority=1, match=match,instructions=inst)
+                    # datapath.send_msg(mod)  
+                    # return
+
                     
 
-        if len(self.bot_ip) > 0:
-            print(str(self.bot_ip))     
+        # if len(self.bot_ip) > 0:
+        #     print(str(self.bot_ip))     
         
         if pkt_eth:
             dst_mac = pkt_eth.dst
@@ -224,10 +243,14 @@ class SimpleController(app_manager.RyuApp):
                 # print ("pkt_arp:dst_ip: " + str(pkt_arp.dst_ip))
                 # print ("pkt_arp:src_mac: " + str(pkt_arp.src_mac))
                 # print ("pkt_arp:dst_mac: " + str(pkt_arp.dst_mac))
-
-                if str(pkt_arp.src_ip) in self.bot_ip:
+                sql.update_mac_ip_host(mac_address=str(pkt_arp.src_mac),ip_address=str(pkt_arp.src_ip))
+                sql.update_mac_ip_host(mac_address=str(pkt_arp.dst_mac),ip_address=str(pkt_arp.dst_ip))
+                
+                if str(src_ip) in self.bot_ip:
                     print("Dropping packet due to detection as bot host from " + str(src_ip))
-                    self.drop_packet(ev=ev,in_port=in_port,src_mac=pkt.src__mac,dst_mac=pkt_arp.dst_mac,src_ip=pkt_arp.src_ip,dst_ip=pkt_arp.dst_ip,ip_proto=ip_proto)
+                    match = parser.OFPMatch(in_port=in_port, eth_src=src)
+                    actions = []
+                    self.add_flow(datapath, 10, match, actions)
                     return
                 adj_list = to_dict_of_lists(self.topology)
                 self.host_mac_ip[ str(pkt_arp.src_ip)] = str(pkt_arp.src_mac)
@@ -252,26 +275,26 @@ class SimpleController(app_manager.RyuApp):
         else:
             out_port = ofproto.OFPP_FLOOD
 
-        if src_ip not in self.bot_ip:
-            actions = [parser.OFPActionOutput(out_port)]
+        # if src_ip not in self.bot_ip:
+        actions = [parser.OFPActionOutput(out_port)]
 
-            # install a flow to avoid packet_in next time
-            if out_port != ofproto.OFPP_FLOOD:
-                match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-                # verify if we have a valid buffer_id, if yes avoid to send both
-                # flow_mod & packet_out
-                if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                    self.add_flow(datapath, 1, match, actions, msg.buffer_id)
-                    return
-                else:
-                    self.add_flow(datapath, 1, match, actions)
-            data = None
-            if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-                data = msg.data
+        # install a flow to avoid packet_in next time
+        if out_port != ofproto.OFPP_FLOOD:
+            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+            # verify if we have a valid buffer_id, if yes avoid to send both
+            # flow_mod & packet_out
+            if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                return
+            else:
+                self.add_flow(datapath, 1, match, actions)
+        data = None
+        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+            data = msg.data
 
-            out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
-                                    in_port=in_port, actions=actions, data=data)
-            datapath.send_msg(out)
+        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
+                                in_port=in_port, actions=actions, data=data)
+        datapath.send_msg(out)
     
     @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
     def port_status_handler(self, ev):
@@ -299,8 +322,11 @@ class SimpleController(app_manager.RyuApp):
         mac = host.mac
         switch = host.port.dpid
         port = host.port.port_no
+
+        print("Host "+str(mac) + " -> " + str(switch) + " -> " + str(port))
         self.host_to_switch[str(mac)] = str(switch)
         
+        sql.insert_host_data(mac_address=mac,switch_id=switch,port_no=port)
         if str(mac) not in self.topology:
             self.topology.add_node(str(mac))
             self.topology.add_edge(str(mac),str(switch),port=port)

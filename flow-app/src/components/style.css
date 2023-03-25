@@ -1,0 +1,74 @@
+.graph-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+  }
+  
+  .Grph{
+    font-family: sans-serif;
+    text-align: center;
+  }
+  
+  .node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+  }
+  
+  .node img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  
+  .node h2 {
+    margin-top: 10px;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+  }
+  
+  .edge-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .edge {
+    position: absolute;
+    border: 2px solid #000;
+    border-radius: 5px;
+    background-color: #fff;
+    z-index: -1;
+  }
+  
+  .edge:before {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #000;
+    top: -5px;
+    left: -5px;
+    border-radius: 50%;
+    z-index: 1;
+  }
+  
+  [data-from="node1"][data-to="node2"] .edge {
+    top: 120px;
+    left: 120px;
+    width: 120px;
+  }
+  
+  [data-from="node1"][data-to="node3"] .edge {
+    top: 120px;
+    left: 480px;
+    height: 180px;
+  }
+  

@@ -6,7 +6,7 @@ link = []
 switch = []
 host = []
 G = nx.DiGraph()
-
+ 
 try:
     mydb = mysql.connector.connect(
         host="localhost",
