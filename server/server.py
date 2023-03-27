@@ -146,11 +146,88 @@ def get_path():
         if mydb.is_connected():
             mycursor.close()
             mydb.close()
-
-    print(arr)
     return json.dumps(arr)
 
+@app.route('/traffic_flow_data')
+def get_traffic_flow_data():
+    data = sql.traffic_data()
+    link = []
+    switch = []
+    host = []
+    G = nx.DiGraph()
+    result = []
 
+    try:
+        mydb = mysql.connector.connect(
+            host="localhost",
+            user="root",
+            password="password",
+            database="SDN",
+            auth_plugin='mysql_native_password'
+            )
+        mycursor = mydb.cursor()
+        s = "SELECT mac_address,switch_id FROM HOST_TABLE;"
+        mycursor.execute(s)
+        res = mycursor.fetchall()
+        host = res
+
+        s = "SELECT switch_id FROM SWITCH_TABLE;"
+        mycursor.execute(s)
+        s = mycursor.fetchall()
+        
+        for i in s:
+            switch.append(i[0])
+        
+        s = "SELECT node,connected_to FROM GRAPH_LINK_TABLE;"
+        mycursor.execute(s)
+        link = mycursor.fetchall()
+
+        for i in host:
+            G.add_node(str(i[0]),type='host')
+
+        for i in switch:
+            if i[0] not in G:
+                G.add_node(str(i[0]),type='switch')
+        
+        for i in link:
+            G.add_edge(str(i[0]),str(i[1]))
+            G.add_edge(str(i[1]),str(i[0]))
+        
+        for i in host:
+            G.add_edge(str(i[0]),str(i[1]))
+            G.add_edge(str(i[1]),str(i[0]))
+
+        id = 1
+        for i in data:
+            d = dict()
+            d["key"] = id
+            d["src_mac"] = i[0]
+            d["src_ip"] = i[1]
+            d["dst_mac"] = i[2]
+            d["dst_ip"] = i[3]
+            d["pkt_type"] = i[4]
+            d["pkt_size"] = i[5]
+            try:
+                path = nx.shortest_path(G,str(i[0]),str(i[2]))
+                d['path'] = path
+            except nx.NetworkXNoPath:
+                path = []
+                d['path'] = path
+
+            except nx.NetworkXError:
+                path=[]
+                d['path'] = path
+
+            result.append(d)
+            id = id+1
+ 
+    finally:
+        if mydb.is_connected():
+            mycursor.close()
+            mydb.close()
+
+
+    return json.dumps(result)
 
 @app.route('/get_link_data')
 def get_link_data():

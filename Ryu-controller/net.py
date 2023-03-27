@@ -37,6 +37,7 @@ class SimpleController(app_manager.RyuApp):
         self.bot_ip = set()
         self.flow_to_port = {}
         self.switch_status = {}
+        self.traffic_flow_data = []
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -151,12 +152,11 @@ class SimpleController(app_manager.RyuApp):
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         dst = eth.dst
         src = eth.src
-
         self.mac_to_port.setdefault(dpid, {})
 
         self.mac_to_port[dpid][src] = in_port
 
-        
+        # ipv4 packet
         if ip_pkt:
             src_ip = ip_pkt.src
             dst_ip = ip_pkt.dst
@@ -168,7 +168,17 @@ class SimpleController(app_manager.RyuApp):
                 self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
             else:
                 self.traffic_data[src_ip] = {'pkts': [pkt_len], 'dst_ips': [dst_ip]}
-        
+            
+            d = dict()
+            d['src_mac'] = self.host_mac_ip[str(src_ip)]
+            d['src_ip'] = src_ip
+            d['dst_mac'] = self.host_mac_ip[str(dst_ip)]
+            d['dst_ip'] = dst_ip
+            d['pkt_type'] = "IPV4"
+            d['pkt_size'] = pkt_len
+            d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
+            self.traffic_flow_data.append(d)
+            sql.inserting_traffic_flow(res=self.traffic_flow_data)
 
 
         cluster = self.analyze_traffic()
@@ -208,6 +218,7 @@ class SimpleController(app_manager.RyuApp):
             # ignore lldp packet
             return
         
+        # tcp packet
         pkt_tcp = pkt.get_protocol(tcp.tcp)
         if pkt_tcp:  
             ip_header = pkt.get_protocol(ipv4.ipv4)
@@ -217,11 +228,11 @@ class SimpleController(app_manager.RyuApp):
             # dst_port = tcp_header.dst_port
             # seq_num = tcp_header.seq
             pkt_size = len(pkt)
-            # if src_ip in self.traffic_data:
-            #     self.traffic_data[src_ip]['pkts'].append(pkt_size)
-            #     self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
-            # else:
-            #     self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
+            if src_ip in self.traffic_data:
+                self.traffic_data[src_ip]['pkts'].append(pkt_size)
+                self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
+            else:
+                self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
             if str(src_ip) in self.bot_ip:
                 print("Dropping packet due to detection as bot host from " + str(src_ip))
                 match = parser.OFPMatch(in_port=in_port, eth_src=src)
@@ -231,7 +242,19 @@ class SimpleController(app_manager.RyuApp):
             print(f'TCP packet received: {src_ip} : {self.host_mac_ip[str(src_ip)]}:-> {dst_ip} : {self.host_mac_ip[str(dst_ip)]}')
             # print("Shortest path from " + str(self.host_mac_ip[str(src_ip)]) + " to "+ str(self.host_mac_ip[str(dst_ip)])+" : " )
             self.get_shortest_path(self.host_to_switch[self.host_mac_ip[str(src_ip)]],self.host_to_switch[self.host_mac_ip[str(src_ip)]], self.topology)
-        
+
+            d = dict()
+            d['src_mac'] = self.host_mac_ip[str(src_ip)]
+            d['src_ip'] = src_ip
+            d['dst_mac'] = self.host_mac_ip[str(dst_ip)]
+            d['dst_ip'] = dst_ip
+            d['pkt_type'] = "TCP"
+            d['pkt_size'] = pkt_len
+            d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
+            self.traffic_flow_data.append(d)
+            sql.inserting_traffic_flow(res=self.traffic_flow_data)
+
+        # arp packet packet
         pkt_arp = pkt.get_protocol(arp.arp)
         if pkt_arp:
             if str(pkt_arp.dst_mac) != "00:00:00:00:00:00":
@@ -260,16 +283,27 @@ class SimpleController(app_manager.RyuApp):
                 src_ip = pkt_arp.src_ip
                 dst_ip = pkt_arp.dst_ip
                 pkt_size = len(pkt)
-                # if src_ip in self.traffic_data:
-                #     self.traffic_data[src_ip]['pkts'].append(pkt_size)
-                #     self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
-                # else:
-                #     self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
+                if src_ip in self.traffic_data:
+                    self.traffic_data[src_ip]['pkts'].append(pkt_size)
+                    self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
+                else:
+                    self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
 
                 for node, neighbors in adj_list.items():
                     print(f"{node}: {neighbors}")
                 print("Shortest path from " + str(pkt_arp.src_mac) + " to "+ str(pkt_arp.dst_mac)+" : " )
                 self.get_shortest_path(self.host_to_switch[str(pkt_arp.src_mac)],self.host_to_switch[str(pkt_arp.dst_mac)], self.topology)
+
+                d = dict()
+                d['src_mac'] = str(pkt_arp.src_mac)
+                d['src_ip'] = str(pkt_arp.src_ip)
+                d['dst_mac'] = str(pkt_arp.dst_mac)
+                d['dst_ip'] = str(pkt_arp.dst_ip)
+                d['pkt_type'] = "ARP"
+                d['pkt_size'] = pkt_size
+                d['path'] = self.get_shortest_path(str(pkt_arp.src_mac),str(pkt_arp.dst_mac),self.topology)
+                self.traffic_flow_data.append(d)
+                sql.inserting_traffic_flow(res=self.traffic_flow_data)
 
         if dst in self.mac_to_port[dpid]:
             out_port = self.mac_to_port[dpid][dst]
@@ -296,6 +330,7 @@ class SimpleController(app_manager.RyuApp):
         out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
                                 in_port=in_port, actions=actions, data=data)
         datapath.send_msg(out)
+
     
     @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
     def port_status_handler(self, ev):
@@ -593,10 +628,10 @@ class SimpleController(app_manager.RyuApp):
             return path
         except nx.NetworkXNoPath:
             self.logger.warn("[+]\tNo path found between %s - %s",src,dst)
-            return None
+            return []
         except nx.NetworkXError:
             self.logger.error("Network Error")
-            return None
+            return []
         
     def re_route(self,links):
         src = links.src.dpid

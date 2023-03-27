@@ -1,10 +1,14 @@
 import Tab from "../components/Tab";
 
+import "./traffic.css"
+import TrafficFlow from "../components/TrafficFlow";
 function Traffic() {
     return (
       <div>
         <Tab />
-        <h1>Traffic content</h1>
+        <div className="box">
+          <TrafficFlow />
+        </div>
       </div>
     );
   }

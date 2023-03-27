@@ -14,7 +14,7 @@ import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Grid from '@mui/material/Grid';
 
-
+import './detail.css'
 import Host_details from "../components/host_details";
 import Link_details from "../components/link_details";
 import Bot_tables from "../components/bot_details";
@@ -33,9 +33,8 @@ function Details() {
   return (
     <div>
       <Tab />
-      <br></br>
       {/* host and link details */}
-      <div>
+      <div className="box">
         <MDBRow>
           <MDBCol sm="6">
             <MDBCard>
@@ -60,9 +59,7 @@ function Details() {
         </MDBRow>
       </div>
 
-      <br></br>
-        <br></br>
-      <div>
+      <div className="box">
       <Box sx={{ flexGrow: 1 }}>
       <Grid container spacing={2}>
         <Grid item xs={8}>
@@ -79,10 +76,7 @@ function Details() {
       </Grid>
     </Box>
       </div>
-
-      <br></br>
-        <br></br>
-      <div>
+      <div className="box">
       <Box sx={{ flexGrow: 1 }}>
       <Grid container spacing={2}>
         <Grid item xs={6} md={8}>
@@ -102,7 +96,7 @@ function Details() {
 
             In the context of routing in a Ryu controller, the Monte Carlo algorithm can be used to optimize the routing decisions made by the controller. The algorithm can be applied in two phases: an off-policy phase and an on-policy phase. In the off-policy phase, the algorithm generates a set of trajectories by following a random policy. In the on-policy phase, the algorithm uses the trajectories to estimate the value of each state and action, and updates the policy accordingly.
 
-            The Monte Carlo algorithm can be a powerful tool for optimizing routing decisions in a Ryu controller. By using actual experience to estimate the value of states and actions, the algorithm can learn to make optimal routing decisions in complex and dynamic network environments. However, the effectiveness of the algorithm depends on the quality of the reward signals and the complexity of the network environment. In practice, the algorithm may need to be combined with other reinforcement learning algorithms or heuristic methods to achieve optimal routing performance.
+            The Monte Carlo algorithm can be a powerful tool for optimizing routing decisions in a Ryu controller. By using actual experience to estimate the value of states and actions, the algorithm can learn to make optimal routing decisions in complex and dynamic network environments. 
             </p>
           </Item>
         </Grid>

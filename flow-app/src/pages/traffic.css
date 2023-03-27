@@ -1,0 +1,11 @@
+.box{
+    background-color: darkgrey;
+    height: 100%;
+    margin-top: 20px;
+    padding-top: 5px;
+    margin-left: 250px;
+    box-sizing: border-box;
+    border-radius: 10px 10px 10px 10px;
+    margin-right: 250px;
+    box-shadow: 20px 20px 10px rgb(173, 173, 173);
+}

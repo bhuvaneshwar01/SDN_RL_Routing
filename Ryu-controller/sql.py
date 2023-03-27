@@ -1,4 +1,5 @@
 import mysql.connector
+import json
 
 class sql():
     def insert_host_data(mac_address, switch_id, port_no):
@@ -42,6 +43,33 @@ class sql():
             if mydb.is_connected():
                 mycursor.close()
                 mydb.close()
+
+    def inserting_traffic_flow(res):
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql="CREATE TABLE IF NOT EXISTS TRAFFIC_FLOW_TABLE (src_mac VARCHAR(50),src_ip VARCHAR(50),dst_mac VARCHAR(50),dst_ip VARCHAR(50),pkt_type VARCHAR(50),pkt_len VARCHAR(50));"
+            mycursor.execute(sql)
+            sql = "TRUNCATE TRAFFIC_FLOW_TABLE;"
+            mycursor.execute(sql)
+
+            for i in res:    
+                sql = "INSERT INTO TRAFFIC_FLOW_TABLE(src_mac,src_ip,dst_mac,dst_ip,pkt_type,pkt_len) values (%s,%s, %s,%s,%s, %s)"
+                val = (str(i['src_mac']),str(i['src_ip']),str(i['dst_mac']),str(i['dst_ip']),str(i['pkt_type']),str(i['pkt_size']))
+                mycursor.execute(sql,val)
+            mydb.commit()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+
 
     def truncate_host_table():
         try:
