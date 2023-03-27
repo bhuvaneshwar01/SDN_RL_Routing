@@ -177,6 +177,7 @@ class SimpleController(app_manager.RyuApp):
             for s_ip,data in cluster.items():
                 if data['cluster'] == 'bot': 
                     self.bot_ip.add(str(s_ip))
+                    sql.insert_bot_data(ip_addr= str(s_ip),mac_addr = self.host_mac_ip[str(s_ip)])
                     
                     # match = parser.OFPMatch(eth_src=src)
 
@@ -550,6 +551,9 @@ class SimpleController(app_manager.RyuApp):
             sql = "CREATE TABLE IF NOT EXISTS GRAPH_LINK_TABLE (node VARCHAR(50),connected_to VARCHAR(50));"
             mycursor.execute(sql)
 
+            sql = "DELETE FROM LINK_TABLE WHERE src_switch_id = " + str(src_dpid) +",src_switch_port="+ str(src_port) +",dst_switch_id = " + str(dst_dpid) +",dst_switch_port = " + str(dst_port) + ";"
+            val = (str(src_dpid),str(src_port),str(dst_dpid),str(dst_port))
+            
             sql = "CREATE TABLE IF NOT EXISTS GRAPH_NODE_TABLE (node VARCHAR(50));"
             mycursor.execute(sql)
 

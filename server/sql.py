@@ -63,7 +63,7 @@ class sql():
                 mycursor.close()
                 mydb.close()
         return link
-    
+     
     def truncate_table():
         try:
             mydb = mysql.connector.connect(
@@ -78,9 +78,11 @@ class sql():
             mycursor.execute(sql)
             sql = "TRUNCATE SWITCH_TABLE;"
             mycursor.execute(sql)
-            # sql = "TRUNCATE GRAPH_SWITCH_TABLE;"
-            # mycursor.execute(sql)
+            sql = "TRUNCATE BOT_TABLE;"
+            mycursor.execute(sql)
             sql = "TRUNCATE GRAPH_LINK_TABLE;"
+            mycursor.execute(sql)
+            sql = "TRUNCATE LINK_TABLE;"
             mycursor.execute(sql)
             mydb.commit()
             # print(mycursor.rowcount, "record inserted.")
@@ -100,6 +102,49 @@ class sql():
                 )
             mycursor = mydb.cursor()
             sql = "SELECT * FROM HOST_TABLE;"
+            # val = (ip_address,mac_address)
+            mycursor.execute(sql)
+            res = mycursor.fetchall()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+        return res
+    
+
+    def link_data():
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql = "SELECT * FROM LINK_TABLE;"
+            # val = (ip_address,mac_address)
+            mycursor.execute(sql)
+            res = mycursor.fetchall()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+        return res
+    
+    def get_bot_data():
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql = "SELECT * FROM BOT_TABLE;"
             # val = (ip_address,mac_address)
             mycursor.execute(sql)
             res = mycursor.fetchall()
