@@ -17,7 +17,8 @@ import networkx as nx
 from threading import Lock
 from networkx.convert import to_dict_of_lists
 from bot_detection import bot_detection
-from sql import sql
+from sql import sql as queies
+from tokenBucket import TokenBucket
 
 UP = 1
 DOWN = 0
@@ -38,6 +39,7 @@ class SimpleController(app_manager.RyuApp):
         self.flow_to_port = {}
         self.switch_status = {}
         self.traffic_flow_data = []
+        self.bucket = TokenBucket(capacity=10, fill_rate=2)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):
@@ -152,10 +154,12 @@ class SimpleController(app_manager.RyuApp):
         ip_pkt = pkt.get_protocol(ipv4.ipv4)
         dst = eth.dst
         src = eth.src
+        not_bot = True
         self.mac_to_port.setdefault(dpid, {})
 
         self.mac_to_port[dpid][src] = in_port
 
+        
         # ipv4 packet
         if ip_pkt:
             src_ip = ip_pkt.src
@@ -176,19 +180,19 @@ class SimpleController(app_manager.RyuApp):
             d['dst_ip'] = dst_ip
             d['pkt_type'] = "IPV4"
             d['pkt_size'] = pkt_len
-            d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
+            # d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
             self.traffic_flow_data.append(d)
-            sql.inserting_traffic_flow(res=self.traffic_flow_data)
+            if len(self.traffic_flow_data) <= 20:
+                queies.inserting_traffic_flow(res=self.traffic_flow_data)
 
 
         cluster = self.analyze_traffic()
 
         if cluster is not None and src_ip is not None:
             for s_ip,data in cluster.items():
-                if data['cluster'] == 'bot': 
+                if data['cluster'] == 'bot' and str(src_ip) == s_ip: 
                     self.bot_ip.add(str(s_ip))
-                    sql.insert_bot_data(ip_addr= str(s_ip),mac_addr = self.host_mac_ip[str(s_ip)])
-                    
+                    not_bot = False
                     # match = parser.OFPMatch(eth_src=src)
 
                     # actions = []
@@ -203,10 +207,7 @@ class SimpleController(app_manager.RyuApp):
                     # datapath.send_msg(mod)  
                     # return
 
-                    
-
-        # if len(self.bot_ip) > 0:
-        #     print(str(self.bot_ip))     
+                     
         
         if pkt_eth:
             dst_mac = pkt_eth.dst
@@ -233,12 +234,15 @@ class SimpleController(app_manager.RyuApp):
                 self.traffic_data[src_ip]['dst_ips'].append(dst_ip)
             else:
                 self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
+            
             if str(src_ip) in self.bot_ip:
                 print("Dropping packet due to detection as bot host from " + str(src_ip))
-                match = parser.OFPMatch(in_port=in_port, eth_src=src)
-                actions = []
-                self.add_flow(datapath, 10, match, actions)
-                return
+                not_bot = False
+            # Rate limit check
+            # if not self.bucket.consume(1):
+            #     self.logger.info("Rate limit exceeded. Ignoring packet-in message.")
+            #     return
+            
             print(f'TCP packet received: {src_ip} : {self.host_mac_ip[str(src_ip)]}:-> {dst_ip} : {self.host_mac_ip[str(dst_ip)]}')
             # print("Shortest path from " + str(self.host_mac_ip[str(src_ip)]) + " to "+ str(self.host_mac_ip[str(dst_ip)])+" : " )
             self.get_shortest_path(self.host_to_switch[self.host_mac_ip[str(src_ip)]],self.host_to_switch[self.host_mac_ip[str(src_ip)]], self.topology)
@@ -250,9 +254,10 @@ class SimpleController(app_manager.RyuApp):
             d['dst_ip'] = dst_ip
             d['pkt_type'] = "TCP"
             d['pkt_size'] = pkt_len
-            d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
+            # d['path'] = self.get_shortest_path(self.host_mac_ip[str(src_ip)],self.host_mac_ip[str(dst_ip)],self.topology)
             self.traffic_flow_data.append(d)
-            sql.inserting_traffic_flow(res=self.traffic_flow_data)
+            if len(self.traffic_flow_data) <= 20:
+                queies.inserting_traffic_flow(res=self.traffic_flow_data)
 
         # arp packet packet
         pkt_arp = pkt.get_protocol(arp.arp)
@@ -267,15 +272,9 @@ class SimpleController(app_manager.RyuApp):
                 # print ("pkt_arp:dst_ip: " + str(pkt_arp.dst_ip))
                 # print ("pkt_arp:src_mac: " + str(pkt_arp.src_mac))
                 # print ("pkt_arp:dst_mac: " + str(pkt_arp.dst_mac))
-                sql.update_mac_ip_host(mac_address=str(pkt_arp.src_mac),ip_address=str(pkt_arp.src_ip))
-                sql.update_mac_ip_host(mac_address=str(pkt_arp.dst_mac),ip_address=str(pkt_arp.dst_ip))
+                queies.update_mac_ip_host(mac_address=str(pkt_arp.src_mac),ip_address=str(pkt_arp.src_ip))
+                queies.update_mac_ip_host(mac_address=str(pkt_arp.dst_mac),ip_address=str(pkt_arp.dst_ip))
                 
-                if str(src_ip) in self.bot_ip:
-                    print("Dropping packet due to detection as bot host from " + str(src_ip))
-                    match = parser.OFPMatch(in_port=in_port, eth_src=src)
-                    actions = []
-                    self.add_flow(datapath, 10, match, actions)
-                    return
                 adj_list = to_dict_of_lists(self.topology)
                 self.host_mac_ip[ str(pkt_arp.src_ip)] = str(pkt_arp.src_mac)
                 self.host_mac_ip[ str(pkt_arp.dst_ip)] = str(pkt_arp.dst_mac)
@@ -289,11 +288,15 @@ class SimpleController(app_manager.RyuApp):
                 else:
                     self.traffic_data[src_ip] = {'pkts': [pkt_size], 'dst_ips': [dst_ip]}
 
-                for node, neighbors in adj_list.items():
-                    print(f"{node}: {neighbors}")
-                print("Shortest path from " + str(pkt_arp.src_mac) + " to "+ str(pkt_arp.dst_mac)+" : " )
-                self.get_shortest_path(self.host_to_switch[str(pkt_arp.src_mac)],self.host_to_switch[str(pkt_arp.dst_mac)], self.topology)
-
+                if str(src_ip) in self.bot_ip:
+                    print("Dropping packet due to detection as bot host from " + str(src_ip))
+                    not_bot= False
+                
+                # # Rate limit check
+                # if not self.bucket.consume(1):
+                #     self.logger.info("Rate limit exceeded. Ignoring packet-in message.")
+                #     return
+ 
                 d = dict()
                 d['src_mac'] = str(pkt_arp.src_mac)
                 d['src_ip'] = str(pkt_arp.src_ip)
@@ -301,35 +304,37 @@ class SimpleController(app_manager.RyuApp):
                 d['dst_ip'] = str(pkt_arp.dst_ip)
                 d['pkt_type'] = "ARP"
                 d['pkt_size'] = pkt_size
-                d['path'] = self.get_shortest_path(str(pkt_arp.src_mac),str(pkt_arp.dst_mac),self.topology)
+                # d['path'] = self.get_shortest_path(str(pkt_arp.src_mac),str(pkt_arp.dst_mac),self.topology)
                 self.traffic_flow_data.append(d)
-                sql.inserting_traffic_flow(res=self.traffic_flow_data)
+                if len(self.traffic_flow_data) <= 20:
+                    queies.inserting_traffic_flow(res=self.traffic_flow_data)
 
-        if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
-        else:
-            out_port = ofproto.OFPP_FLOOD
-
-        # if src_ip not in self.bot_ip:
-        actions = [parser.OFPActionOutput(out_port)]
-
-        # install a flow to avoid packet_in next time
-        if out_port != ofproto.OFPP_FLOOD:
-            match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            # verify if we have a valid buffer_id, if yes avoid to send both
-            # flow_mod & packet_out
-            if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                self.add_flow(datapath, 1, match, actions, msg.buffer_id)
-                return
+        if not_bot:
+            if dst in self.mac_to_port[dpid]:
+                out_port = self.mac_to_port[dpid][dst]
             else:
-                self.add_flow(datapath, 1, match, actions)
-        data = None
-        if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-            data = msg.data
+                out_port = ofproto.OFPP_FLOOD
 
-        out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
-                                in_port=in_port, actions=actions, data=data)
-        datapath.send_msg(out)
+            # if src_ip not in self.bot_ip:
+            actions = [parser.OFPActionOutput(out_port)]
+
+            # install a flow to avoid packet_in next time
+            if out_port != ofproto.OFPP_FLOOD:
+                match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
+                # verify if we have a valid buffer_id, if yes avoid to send both
+                # flow_mod & packet_out
+                if msg.buffer_id != ofproto.OFP_NO_BUFFER:
+                    self.add_flow(datapath, 1, match, actions, msg.buffer_id)
+                    return
+                else:
+                    self.add_flow(datapath, 1, match, actions)
+            data = None
+            if msg.buffer_id == ofproto.OFP_NO_BUFFER:
+                data = msg.data
+
+            out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
+                                    in_port=in_port, actions=actions, data=data)
+            datapath.send_msg(out)
 
     
     @set_ev_cls(ofp_event.EventOFPPortStatus, MAIN_DISPATCHER)
@@ -362,11 +367,18 @@ class SimpleController(app_manager.RyuApp):
         print("Host "+str(mac) + " -> " + str(switch) + " -> " + str(port))
         self.host_to_switch[str(mac)] = str(switch)
         
-        sql.insert_host_data(mac_address=mac,switch_id=switch,port_no=port)
+        queies.insert_host_data(mac_address=mac,switch_id=switch,port_no=port)
         if str(mac) not in self.topology:
             self.topology.add_node(str(mac))
             self.topology.add_edge(str(mac),str(switch),port=port)
             self.topology.add_edge(str(switch),str(mac),port=port)
+
+
+    @set_ev_cls(event.EventHostDelete, MAIN_DISPATCHER)
+    def _host_delete_handler(self, ev):
+        host_mac = str(ev.mac)
+        self.logger.info("Host with MAC %s left the network.", host_mac)
+        queies.delete_host_data(mac=host_mac)
 
 
     @set_ev_cls(event.EventSwitchEnter)
@@ -399,6 +411,227 @@ class SimpleController(app_manager.RyuApp):
                 mydb.close()
         self.logger.info("[+]\tSwitch %s has joined the network",switch.dp.id)
 
+        self.topo_raw_switches = copy.copy(get_switch(self, None))
+        # The Function get_link(self, None) outputs the list of links.
+        self.topo_raw_links = copy.copy(get_link(self, None))
+        print("===========================================================")
+        print(" \t" + "Current Links:")
+        for l in self.topo_raw_links:
+            print (" \t\t" + str(l))
+
+        print(" \t" + "Current Switches:")
+        for s in self.topo_raw_switches:
+            print (" \t\t" + str(s))
+
+
+
+        hosts = copy.copy(get_host(self, None))
+
+
+        G = nx.DiGraph()
+        
+        for dp in self.topo_raw_switches:
+            if dp.dp.id not in G:
+                G.add_node(str(dp.dp.id))
+
+        for link in self.topo_raw_links:
+            G.add_edge(str(link.src.dpid), str(link.dst.dpid), port=link.src.port_no)
+            G.add_edge(str(link.dst.dpid), str(link.src.dpid), port=link.dst.port_no)
+        
+        adj_list = to_dict_of_lists(G)
+
+        # Print the adjacency list
+        for node, neighbors in adj_list.items():
+            print(f"{node}: {neighbors}")
+        
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_LINK_TABLE (node VARCHAR(50),connected_to VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_NODE_TABLE (node VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_NODE_TABLE;"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_LINK_TABLE;"
+            mycursor.execute(sql)
+
+            for node, neighbors in adj_list.items():
+                
+                sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
+                val = (str(node),)
+                mycursor.execute(sql,val)
+                for i in neighbors:
+                    sql = "INSERT INTO GRAPH_LINK_TABLE(node,connected_to) values (%s, %s)"
+                    val = (str(node),str(i))
+                    mycursor.execute(sql,val)
+
+                    
+                    
+            
+            mydb.commit()
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+                
+        for node, neighbors in adj_list.items():
+            for i,j in adj_list.items():
+                if node != i:
+                    self.get_shortest_path(node,i,G)
+        self.topology = G
+        print("===========================================================")
+
+    @set_ev_cls(event.EventSwitchLeave, [MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER])
+    def handler_switch_leave(self, ev):
+        self.logger.info("Not tracking Switches, switch leaved.")
+        switch = ev.switch
+        switch_id = switch.dp.id
+
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            mycursor.execute("DELETE FROM SWITCH_TABLE  WHERE switch_id="+str(switch_id)+";")
+            # print(mycursor.rowcount, "record deleted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+        
+        if str(switch.dp.id) in self.topology:
+            self.topology.remove_node(str(switch.dp.id))
+        self.logger.info("[-]\tSwitch %s has left the network",switch.dp.id)
+
+        self.topo_raw_switches = copy.copy(get_switch(self, None))
+        # The Function get_link(self, None) outputs the list of links.
+        self.topo_raw_links = copy.copy(get_link(self, None))
+        print("===========================================================")
+        print(" \t" + "Current Links:")
+        for l in self.topo_raw_links:
+            print (" \t\t" + str(l))
+
+        print(" \t" + "Current Switches:")
+        for s in self.topo_raw_switches:
+            print (" \t\t" + str(s))
+
+        
+        if len(self.topo_raw_switches) <= 1:
+            s = queies.truncate_table()
+
+        hosts = copy.copy(get_host(self, None))
+
+
+        G = nx.DiGraph()
+        
+        for dp in self.topo_raw_switches:
+            if dp.dp.id not in G:
+                G.add_node(str(dp.dp.id))
+
+        for link in self.topo_raw_links:
+            G.add_edge(str(link.src.dpid), str(link.dst.dpid), port=link.src.port_no)
+            G.add_edge(str(link.dst.dpid), str(link.src.dpid), port=link.dst.port_no)
+        
+        adj_list = to_dict_of_lists(G)
+
+        # Print the adjacency list
+        for node, neighbors in adj_list.items():
+            print(f"{node}: {neighbors}")
+        
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_LINK_TABLE (node VARCHAR(50),connected_to VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "CREATE TABLE IF NOT EXISTS GRAPH_NODE_TABLE (node VARCHAR(50));"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_NODE_TABLE;"
+            mycursor.execute(sql)
+
+            sql = "TRUNCATE GRAPH_LINK_TABLE;"
+            mycursor.execute(sql)
+
+            for node, neighbors in adj_list.items():
+                sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
+                val = (str(node),)
+                mycursor.execute(sql,val)
+                for i in neighbors:
+                    sql = "INSERT INTO GRAPH_LINK_TABLE(node,connected_to) values (%s, %s)"
+                    val = (str(node),str(i))
+                    mycursor.execute(sql,val)
+                    
+            
+            mydb.commit()
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+                
+        for node, neighbors in adj_list.items():
+            for i,j in adj_list.items():
+                if node != i:
+                    self.get_shortest_path(node,i,G)
+        self.topology = G
+        print("===========================================================")
+
+    @set_ev_cls(event.EventLinkAdd)
+    def get_link_data(self,ev):
+        link = ev.link
+        src_dpid = link.src.dpid
+        dst_dpid = link.dst.dpid
+        src_port = link.src.port_no
+        dst_port = link.dst.port_no
+
+        self.logger.info("[+]\tNew Link detected between %s and %s",link.src.dpid,link.dst.dpid)
+        
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql="CREATE TABLE IF NOT EXISTS LINK_TABLE (src_switch_id VARCHAR(50),src_switch_port VARCHAR(50),dst_switch_id VARCHAR(20),dst_switch_port VARCHAR(20));"
+            mycursor.execute(sql)
+            sql = "INSERT INTO LINK_TABLE(src_switch_id,src_switch_port,dst_switch_id,dst_switch_port) values (%s, %s, %s,%s)"
+            val = (str(src_dpid),str(src_port),str(dst_dpid),str(dst_port))
+            mycursor.execute(sql,val)
+            mydb.commit()
+            # print(mycursor.rowcount, "record inserted.")
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+        finally:
+            # print()
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+
+        
         self.topo_raw_switches = copy.copy(get_switch(self, None))
         # The Function get_link(self, None) outputs the list of links.
         self.topo_raw_links = copy.copy(get_link(self, None))
@@ -452,84 +685,20 @@ class SimpleController(app_manager.RyuApp):
             mycursor.execute(sql)
 
             for node, neighbors in adj_list.items():
-                # sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
-                # val = (str(node))
-                # mycursor.execute(sql,val)
+                
+                sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
+                val = (str(node),)
+                mycursor.execute(sql,val)
                 for i in neighbors:
                     sql = "INSERT INTO GRAPH_LINK_TABLE(node,connected_to) values (%s, %s)"
                     val = (str(node),str(i))
                     mycursor.execute(sql,val)
+
+                    
                     
             
             mydb.commit()
         finally:
-            if mydb.is_connected():
-                mycursor.close()
-                mydb.close()
-                
-        for node, neighbors in adj_list.items():
-            for i,j in adj_list.items():
-                if node != i:
-                    self.get_shortest_path(node,i,G)
-        self.topology = G
-        print("===========================================================")
-
-    @set_ev_cls(event.EventSwitchLeave, [MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER])
-    def handler_switch_leave(self, ev):
-        self.logger.info("Not tracking Switches, switch leaved.")
-        switch = ev.switch
-        switch_id = switch.dp.id
-
-        try:
-            mydb = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="password",
-                database="SDN",
-                auth_plugin='mysql_native_password'
-                )
-            mycursor = mydb.cursor()
-            mycursor.execute("DELETE FROM SWITCH_TABLE  WHERE switch_id="+str(switch_id)+";")
-            # print(mycursor.rowcount, "record deleted.")
-        finally:
-            if mydb.is_connected():
-                mycursor.close()
-                mydb.close()
-        
-        self.topology.remove_node(str(switch.dp.id))
-        self.logger.info("[-]\tSwitch %s has left the network",switch.dp.id)
-
-    @set_ev_cls(event.EventLinkAdd)
-    def get_link_data(self,ev):
-        link = ev.link
-        src_dpid = link.src.dpid
-        dst_dpid = link.dst.dpid
-        src_port = link.src.port_no
-        dst_port = link.dst.port_no
-
-        self.logger.info("[+]\tNew Link detected between %s and %s",link.src.dpid,link.dst.dpid)
-        
-        try:
-            mydb = mysql.connector.connect(
-                host="localhost",
-                user="root",
-                password="password",
-                database="SDN",
-                auth_plugin='mysql_native_password'
-                )
-            mycursor = mydb.cursor()
-            sql="CREATE TABLE IF NOT EXISTS LINK_TABLE (src_switch_id VARCHAR(50),src_switch_port VARCHAR(50),dst_switch_id VARCHAR(20),dst_switch_port VARCHAR(20));"
-            mycursor.execute(sql)
-            sql = "INSERT INTO LINK_TABLE(src_switch_id,src_switch_port,dst_switch_id,dst_switch_port) values (%s, %s, %s,%s)"
-            val = (str(src_dpid),str(src_port),str(dst_dpid),str(dst_port))
-            mycursor.execute(sql,val)
-            mydb.commit()
-            # print(mycursor.rowcount, "record inserted.")
-            if mydb.is_connected():
-                mycursor.close()
-                mydb.close()
-        finally:
-            # print()
             if mydb.is_connected():
                 mycursor.close()
                 mydb.close()
@@ -599,9 +768,9 @@ class SimpleController(app_manager.RyuApp):
             mycursor.execute(sql)
 
             for node, neighbors in adj_list.items():
-                # sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
-                # val = (str(node))
-                # mycursor.execute(sql,val)
+                sql = "INSERT INTO GRAPH_NODE_TABLE(node) values (%s)"
+                val = (str(node),)
+                mycursor.execute(sql,val)
                 for i in neighbors:
                     sql = "INSERT INTO GRAPH_LINK_TABLE(node,connected_to) values (%s, %s)"
                     val = (str(node),str(i))
@@ -695,37 +864,4 @@ class SimpleController(app_manager.RyuApp):
         if len(self.traffic_data) <= 1:
             return
         return bot_detection(traffic_data=self.traffic_data)
-        # agg_data = {}
-        # for src_ip, data in self.traffic_data.items():
-        #     agg_data[src_ip] = {'pkt_count': len(data['pkts']),
-        #                         'total_bytes': sum(data['pkts']),
-        #                         'dst_ips': list(set(data['dst_ips']))}
         
-        # # Calculate the consistency score for each source IP address
-        # const_data = {}
-        # for src_ip, data in agg_data.items():
-        #     pkt_count = data['pkt_count']
-        #     total_bytes = data['total_bytes']
-        #     dst_ips = data['dst_ips']
-        #     dst_count = len(dst_ips)
-        #     const_data[src_ip] = {'pkt_count': pkt_count,
-        #                         'total_bytes': total_bytes,
-        #                         'dst_count': dst_count,
-        #                         'const_score': pkt_count/dst_count}
-        
-        # # Cluster the source IP addresses based on the consistency score
-        # cluster_data = {}
-        # for src_ip, data in const_data.items():
-        #     const_score = data['const_score']
-        #     if const_score < 0.5:
-        #         cluster = 'bot'
-        #     else:
-        #         cluster = 'normal'
-        #     cluster_data[src_ip] = {'pkt_count': data['pkt_count'],
-        #                             'total_bytes': data['total_bytes'],
-        #                             'dst_count': data['dst_count'],
-        #                             'const_score': const_score,
-        #                             'cluster': cluster}
-        
-        # # Return the cluster data
-        # return cluster_data

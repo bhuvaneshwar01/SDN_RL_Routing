@@ -66,8 +66,7 @@ export default function Bot_tables() {
         <TableHead>
           <TableRow>
             <StyledTableCell>S No</StyledTableCell>
-            <StyledTableCell >MAC Address</StyledTableCell>
-            <StyledTableCell >IP Address&nbsp;(g)</StyledTableCell>
+            <StyledTableCell >IP Address</StyledTableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -76,7 +75,6 @@ export default function Bot_tables() {
               <StyledTableCell component="th" scope="row">
                 {row.key}
               </StyledTableCell>
-              <StyledTableCell >{row.mac_address}</StyledTableCell>
               <StyledTableCell >{row.ip_address}</StyledTableCell>
             </StyledTableRow>
           ))}

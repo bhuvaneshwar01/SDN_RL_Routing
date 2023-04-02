@@ -1,10 +1,8 @@
 
 TODO
+1) QUEUE
+2) SWITCH IN websites
 
-1) ARP , TCP Packet
-2) Displaying flow table
-3) shortest_path forwarding
-4) making websites
 
 @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def _packet_in_handler(self, ev):

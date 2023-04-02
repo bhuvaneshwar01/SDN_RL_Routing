@@ -23,6 +23,26 @@ class sql():
             if mydb.is_connected():
                 mycursor.close()
                 mydb.close()
+        
+    def delete_host_data(mac):
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql= "DELETE FROM HOST_TABLE WHERE mac_address = (%s);"
+            val = (mac,)
+            mycursor.execute(sql,val)
+            mydb.commit()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
 
     def update_mac_ip_host(mac_address,ip_address):
         try:
@@ -91,7 +111,7 @@ class sql():
                 mycursor.close()
                 mydb.close()
 
-    def insert_bot_data(mac_addr,ip_addr):
+    def insert_bot_data(ip_addr):
         try:
             mydb = mysql.connector.connect(
                 host="localhost",
@@ -108,8 +128,8 @@ class sql():
             res =  mycursor.fetchall()
             if res:
                 return
-            sql = """INSERT INTO BOT_TABLE(mac_address,ip_address) values (%s,%s);"""
-            val = (mac_addr,ip_addr)
+            sql = "INSERT INTO BOT_TABLE(ip_address) values (%s);"
+            val = (ip_addr,)
             mycursor.execute(sql,val)
             mydb.commit()
             print(mycursor.rowcount, "record inserted.")
@@ -120,4 +140,29 @@ class sql():
 
 # mysql.connector.errors.ProgrammingError: 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '.0.3' at line 1
 
-        
+    def truncate_table():
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql = "TRUNCATE HOST_TABLE;"
+            mycursor.execute(sql)
+            sql = "TRUNCATE SWITCH_TABLE;"
+            mycursor.execute(sql)
+            sql = "TRUNCATE BOT_TABLE;"
+            mycursor.execute(sql)
+            sql = "TRUNCATE GRAPH_LINK_TABLE;"
+            mycursor.execute(sql)
+            sql = "TRUNCATE LINK_TABLE;"
+            mycursor.execute(sql)
+            mydb.commit()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()

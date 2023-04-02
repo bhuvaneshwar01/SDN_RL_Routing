@@ -126,8 +126,10 @@ def get_path():
                     d['src'] = str(i[0])
                     d['dst'] = str(j[0])
                     try:
-                        # print(str(i[0]) + " -> " + str(j[0]))
                         path = nx.shortest_path(G,str(i[0]),str(j[0]))
+                        # print(str(i[0]) + " -> " + str(j[0]))
+                        # path = monte_carlo_rl(graph=G,source=str(i[0]),dest=str(j[0]),num_episodes=1000,epsilon=0.1,cutoff=100)
+                        # print(monte_carlo_rl(graph=G,source=str(i[0]),dest=str(j[0]),num_episodes=1000,epsilon=0.1,cutoff=100))
                         # print(path)
 
                         d['path'] = path
@@ -255,7 +257,7 @@ def get_link_data():
 def truncate():
     sql.truncate_table()
 
-    return True
+    return str(True)
 
 
 

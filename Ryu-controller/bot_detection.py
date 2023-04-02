@@ -2,6 +2,7 @@
 import numpy as np
 from scipy.stats import dirichlet
 from sklearn.cluster import KMeans
+from sql import sql as queries
 import warnings
 from sklearn.exceptions import ConvergenceWarning
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
@@ -84,7 +85,7 @@ def bot_detection(traffic_data):
         if cluster == normal_cluster:
             cluster_label = 'normal'
         else:
-            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5 or const_data[src_ip]['pkt_count'] >= 50:
+            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5 or const_data[src_ip]['pkt_count'] >= 28:
                 cluster_label = 'bot'
             else:
                 cluster_label = 'normal'
@@ -94,12 +95,20 @@ def bot_detection(traffic_data):
     #     if data['pkt_count'] >= 100:
     #         agg_data[src_ip]['cluster'] = 'bot'
 
-    print("\t[+]\tAgg data : " + str(agg_data))
+    print("\n\n**************************************\n\n")
+    print("Aggregated data : ")
+
+    for src,i in agg_data.items():
+        print(str(src) + "\t" + str(i['pkt_count'] ))
+    print("\n\n**************************************\n\n")
+    
     # print("\n pdf : "+str(pdf_data))
     # Use the labeled clusters to detect and block bot traffic in real-time
+
     for src_ip, data in agg_data.items():
         if data['cluster'] == 'bot':
             print("************BOT DETECTION : " + str(src_ip))
+            queries.insert_bot_data(ip_addr=str(src_ip))
     
     return agg_data
 
