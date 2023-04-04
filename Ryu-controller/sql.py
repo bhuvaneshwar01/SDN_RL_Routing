@@ -74,14 +74,16 @@ class sql():
                 auth_plugin='mysql_native_password'
                 )
             mycursor = mydb.cursor()
-            sql="CREATE TABLE IF NOT EXISTS TRAFFIC_FLOW_TABLE (src_mac VARCHAR(50),src_ip VARCHAR(50),dst_mac VARCHAR(50),dst_ip VARCHAR(50),pkt_type VARCHAR(50),pkt_len VARCHAR(50));"
+            sql="CREATE TABLE IF NOT EXISTS TRAFFIC_FLOW_TABLE (src_mac VARCHAR(50),src_ip VARCHAR(50),dst_mac VARCHAR(50),dst_ip VARCHAR(50),pkt_type VARCHAR(50),pkt_len VARCHAR(50),path JSON);"
             mycursor.execute(sql)
             sql = "TRUNCATE TRAFFIC_FLOW_TABLE;"
             mycursor.execute(sql)
+            #  = "ALTER TABLE TRAFFIC_FLOW_TABLE ADD UNIQUE INDEX(, name);"
+
 
             for i in res:    
-                sql = "INSERT INTO TRAFFIC_FLOW_TABLE(src_mac,src_ip,dst_mac,dst_ip,pkt_type,pkt_len) values (%s,%s, %s,%s,%s, %s)"
-                val = (str(i['src_mac']),str(i['src_ip']),str(i['dst_mac']),str(i['dst_ip']),str(i['pkt_type']),str(i['pkt_size']))
+                sql = "INSERT IGNORE INTO TRAFFIC_FLOW_TABLE(src_mac,src_ip,dst_mac,dst_ip,pkt_type,pkt_len,path) values (%s,%s, %s,%s,%s, %s,JSON_OBJECT('path',%s))"
+                val = (str(i['src_mac']),str(i['src_ip']),str(i['dst_mac']),str(i['dst_ip']),str(i['pkt_type']),str(i['pkt_size']),json.dumps(i['path']))
                 mycursor.execute(sql,val)
             mydb.commit()
             # print(mycursor.rowcount, "record inserted.")
@@ -160,6 +162,8 @@ class sql():
             mycursor.execute(sql)
             sql = "TRUNCATE LINK_TABLE;"
             mycursor.execute(sql)
+            # sql = "TRUNCATE TRAFFIC_FLOW_TABLE;"
+            # mycursor.execute(sql)
             mydb.commit()
             # print(mycursor.rowcount, "record inserted.")
         finally:

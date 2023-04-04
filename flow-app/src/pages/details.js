@@ -34,7 +34,7 @@ function Details() {
     <div>
       <Tab />
       {/* host and link details */}
-      <div className="box">
+      {/* <div className="box">
         <MDBRow>
           <MDBCol sm="6">
             <MDBCard>
@@ -57,7 +57,7 @@ function Details() {
             </MDBCard>
           </MDBCol>
         </MDBRow>
-      </div>
+      </div> */}
 
       <div className="box">
       <Box sx={{ flexGrow: 1 }}>
