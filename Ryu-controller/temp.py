@@ -35,6 +35,8 @@ class RYUController(app_manager.RyuApp):
         self.gamma = 0.9
         self.epsilon = 0.1
         self.action_space = [0, 1]
+        self.max_drop_probability = 0.01
+        self.min_drop_probability = 0.9
         self.observation_space = [(0, 0), (0, 1), (1, 0), (1, 1)]
 
     # Function to update the Q-learning table based on the reward
@@ -235,8 +237,12 @@ class RYUController(app_manager.RyuApp):
         drop_probability = self.max_drop_probability * (self.queue_size - MAX_QUEUE_SIZE) / MAX_QUEUE_SIZE
         if drop_probability < self.min_drop_probability:
             drop_probability = self.min_drop_probability
+        
         if drop_probability > self.max_drop_probability:
             drop_probability = self.max_drop_probability
+
+        self.max_drop_probability = max(self.max_drop_probability,drop_probability)
+        self.min_drop_probability = min(self.min_drop_probability,drop_probability)
         DROP_PROBABILITY = drop_probability
 
     # Function to generate a random MAC address

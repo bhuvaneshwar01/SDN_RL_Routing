@@ -291,10 +291,11 @@ class SimpleController(app_manager.RyuApp):
                 if str(src_ip) in self.bot_ip:
                     # print("Dropping packet due to detection as bot host from " + str(src_ip))
                     not_bot= False
+                else:
+                    not_bot = True
                 
-                # # Rate limit check
                 # if not self.bucket.consume(1):
-                #     self.logger.info("Rate limit exceeded. Ignoring packet-in message.")
+                #     self.logger.info("Packet dropping......")
                 #     return
                 
                 if len(self.traffic_flow_data) <= 20:
@@ -747,7 +748,7 @@ class SimpleController(app_manager.RyuApp):
         # # print the adjacency list
         # for node, neighbors in adj_list.items():
             # print(f"{node}: {neighbors}")
-        if G.number_of_edges() > 2 and len(self.topo_raw_links) > 2 and len(self.topo_raw_switches) > 2:
+        if G.number_of_edges() >= 2 and len(self.topo_raw_links) >= 2 and len(self.topo_raw_switches) > 2:
             try:
                 mydb = mysql.connector.connect(
                     host="localhost",

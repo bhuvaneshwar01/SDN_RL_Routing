@@ -1,5 +1,6 @@
 import mysql.connector
 import json
+from prettytable import PrettyTable
 
 class sql():
     def insert_host_data(mac_address, switch_id, port_no):
@@ -140,7 +141,68 @@ class sql():
                 mycursor.close()
                 mydb.close()
 
+    def insert_switch_details(req):
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql="CREATE TABLE IF NOT EXISTS SWITCH_DETAILS_TABLE (switch_id VARCHAR(50),(port_no VARCHAR(50)) ;"
+            mycursor.execute(sql)
+            sql = "SELECT * FROM BOT_TABLE WHERE ip_address = %s ;" 
+            mycursor.execute(sql, (ip_addr,))
+            res =  mycursor.fetchall()
+            if res:
+                return
+            sql = "INSERT INTO BOT_TABLE(ip_address) values (%s);"
+            val = (ip_addr,)
+            mycursor.execute(sql,val)
+            mydb.commit()
+            print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
 # mysql.connector.errors.ProgrammingError: 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '.0.3' at line 1
+
+    def insert_hw_swtch(temp_dict):
+        # Create the table headers
+        # table = PrettyTable(['Switch', 'IP Address', 'Connected Host MAC', 'Switch Port No', 'Switch Port MAC'])
+
+        try:
+            mydb = mysql.connector.connect(
+                host="localhost",
+                user="root",
+                password="password",
+                database="SDN",
+                auth_plugin='mysql_native_password'
+                )
+            mycursor = mydb.cursor()
+            sql="CREATE TABLE IF NOT EXISTS SWTCH_HW_TABLE (switch VARCHAR(50),ip_address VARCHAR(50),cnttd_to_mac VARCHAR(50),switch_port_no VARCHAR(50),switch_mac VARCHAR(50));"
+            mycursor.execute(sql)
+            sql = "TRUNCATE SWTCH_HW_TABLE;"
+            mycursor.execute(sql)
+            #  = "ALTER TABLE TRAFFIC_FLOW_TABLE ADD UNIQUE INDEX(, name);"
+
+            for switch, hosts in temp_dict.items():
+                for ip, data in hosts.items():
+                    sql = "INSERT IGNORE INTO SWTCH_HW_TABLE(switch,ip_address,cnttd_to_mac,switch_port_no,switch_mac) values (%s,%s, %s,%s,%s)"
+                    val = (switch, ip, data['connected_host_mac'], data['sw_port_no'], data['sw_port_mac'])
+                    mycursor.execute(sql,val)
+                    mydb.commit()
+            # print(mycursor.rowcount, "record inserted.")
+        finally:
+            if mydb.is_connected():
+                mycursor.close()
+                mydb.close()
+
+        # Add the rows to the table
+        
+                
 
     def truncate_table():
         try:

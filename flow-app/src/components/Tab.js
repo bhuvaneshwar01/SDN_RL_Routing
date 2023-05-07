@@ -22,12 +22,12 @@ function CollapsibleExample() {
   return (
     <Navbar bg="dark" variant="dark">
         <Container>
-          <Navbar.Brand href="#home">Flowmanager</Navbar.Brand>
+          <Navbar.Brand href="/">Flowmanager</Navbar.Brand>
           <Nav className="me-auto">
             <Nav.Link href="/">Graph</Nav.Link>
             <Nav.Link href="/traffic">Traffic data</Nav.Link>
+            <Nav.Link href='/output'>Output</Nav.Link>
             <Nav.Link href="/details">Detailed Information</Nav.Link>
-
             {/* <button onClick={onHandleClear()}> Clear</button> */}
           </Nav>
         </Container>

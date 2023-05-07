@@ -85,7 +85,7 @@ def bot_detection(traffic_data):
         if cluster == normal_cluster:
             cluster_label = 'normal'
         else:
-            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5 or const_data[src_ip]['pkt_count'] >= 28:
+            if np.sum(pdf_data[src_ip]['pdf'] > 0.1) > 3 or const_data[src_ip]['const_score'] < 0.5 or const_data[src_ip]['pkt_count'] >= 55:
                 cluster_label = 'bot'
             else:
                 cluster_label = 'normal'

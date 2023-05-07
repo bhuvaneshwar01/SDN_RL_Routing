@@ -50,6 +50,25 @@ def get_host():
     res = json.dumps(res)
     return res
 
+@app.route('/get_host_switch')
+def get_host_switch():
+    h = sql.get_host_switch_table()
+    res = {}
+
+    id = 1
+
+    for i in h:
+        res.setdefault(id,{})
+        res[id]['switch'] = i[0]
+        res[id]['ip_address'] = i[1]
+        res[id]['connected_to_mac'] = i[2]
+        res[id]['switch_port_no'] = i[3]
+        res[id]['switch_mac_id'] = i[4]
+        id = id + 1
+    # print(str(res))
+    res = json.dumps(res)
+    return res
+
 @app.route('/get_bot')
 def get_bot():
     h = sql.get_bot_data()

@@ -82,7 +82,7 @@ function Grph() {
     },
     edges: {
       color: "#000000",
-      length: 400
+      length: 200
     },
     nodes: {
       shape: 'image',

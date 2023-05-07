@@ -62,7 +62,7 @@ export default function Bot_tables() {
       <h4> No Bot Found</h4>
     ) : (
       <TableContainer component={Paper}>
-      <Table sx={{ minWidth: 700 }} aria-label="customized table">
+      <Table sx={{ minWidth: 250 }} aria-label="customized table">
         <TableHead>
           <TableRow>
             <StyledTableCell>S No</StyledTableCell>

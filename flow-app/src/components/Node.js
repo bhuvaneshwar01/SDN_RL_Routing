@@ -55,7 +55,8 @@ const Node = (props) => {
       hierarchical: false
     },
     edges: {
-      color: "#000000"
+      color: "#000000",
+      length: 20
     },
     nodes: {
       // shape: 'box',
